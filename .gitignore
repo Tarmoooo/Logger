@@ -11,5 +11,8 @@ x64/
 Debug/
 Release/
 
+# DLLs you don't want tracked (optional)
+*.dll
+
 # Temporary files
 *.tmp
