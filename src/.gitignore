@@ -1,0 +1,18 @@
+# Build output
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.log
+
+# Visual Studio folders
+.vs/
+x64/
+Debug/
+Release/
+
+# DLLs you don't want tracked (optional)
+*.dll
+
+# Temporary files
+*.tmp
