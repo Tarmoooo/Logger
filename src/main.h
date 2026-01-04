@@ -88,44 +88,69 @@ private:
 // ======================================================
 class EmulatorHost {
 public:
-    bool connect(const char* dllName,
-                 const char* plantsPath,
+    bool connect(const char* dllPath,
+                 const std::string& plantsPath,
                  int plantNo)
     {
-        h_ = LoadLibraryA(dllName);
+        std::cout << "[connect] Loading DLL...\n";
+        h_ = LoadLibraryA(dllPath);
         if (!h_) {
-            std::cerr << "LoadLibrary failed\n";
+            std::cerr << "[connect] LoadLibraryA failed. GetLastError=" << GetLastError() << "\n";
             return false;
         }
+        std::cout << "[connect] DLL loaded\n";
 
-        set_ = reinterpret_cast<SetFn>(
-            GetProcAddress(h_, "SetIAS0410PlantEmulator"));
-        run_ = reinterpret_cast<RunFn>(
-            GetProcAddress(h_, "RunIAS0410PlantEmulator"));
-
+        std::cout << "[connect] Getting exports...\n";
+        set_ = (SetFn)GetProcAddress(h_, "SetIAS0410PlantEmulator");
+        run_ = (RunFn)GetProcAddress(h_, "RunIAS0410PlantEmulator");
         if (!set_ || !run_) {
-            std::cerr << "GetProcAddress failed\n";
+            std::cerr << "[connect] GetProcAddress failed. GetLastError=" << GetLastError() << "\n";
             FreeLibrary(h_);
             h_ = nullptr;
             return false;
         }
+        std::cout << "[connect] Exports found\n";
 
+        // IMPORTANT: set ControlData pointers exactly like your working version
         buffer_.clear();
-        cd_.pBuf = &buffer_;
+        cd_.pBuf  = &buffer_;
         cd_.pProm = &finished_;
+        cd_.state = 's'; // start stopped (safe default)
 
-        set_(plantsPath, plantNo);
+        std::cout << "[connect] Calling Set...\n";
+        try {
+            set_(plantsPath, plantNo); // std::string ABI (same as your working code)
+        } catch (...) {
+            std::cerr << "[connect] SetIAS0410PlantEmulator threw/aborted\n";
+            FreeLibrary(h_);
+            h_ = nullptr;
+            return false;
+        }
+        std::cout << "[connect] Set finished\n";
+
         return true;
     }
 
     void start() {
-        setState('r');
-        run_(&cd_);   // starts detached producer
+        // start producing
+        {
+            std::lock_guard<std::mutex> lk(cd_.mx);
+            cd_.state = 'r';
+        }
+        cd_.cv.notify_all();
+
+        std::cout << "[start] Calling Run...\n";
+        run_(&cd_); // starts detached producer inside DLL (as in your working code)
+        std::cout << "[start] Run called\n";
     }
 
-    void pause()  { setState('b'); }
-    void resume() { setState('r'); }
-    void stop()   { setState('s'); }
+    void stop() {
+        {
+            std::lock_guard<std::mutex> lk(cd_.mx);
+            cd_.state = 's';
+        }
+        cd_.cv.notify_all();
+    }
 
     void disconnect() {
         if (h_) {
@@ -137,16 +162,8 @@ public:
     ControlData& control() { return cd_; }
 
 private:
-    using SetFn = void(*)(const char*, int);
+    using SetFn = void(*)(std::string, int);
     using RunFn = void(*)(ControlData*);
-
-    void setState(char s) {
-        {
-            std::lock_guard<std::mutex> lk(cd_.mx);
-            cd_.state = s;
-        }
-        cd_.cv.notify_all();
-    }
 
     HMODULE h_{nullptr};
     SetFn set_{nullptr};
@@ -156,3 +173,4 @@ private:
     std::promise<void> finished_;
     ControlData cd_{};
 };
+
