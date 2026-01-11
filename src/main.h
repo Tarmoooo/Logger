@@ -49,7 +49,8 @@ public:
     }
 
 private:
-    void loop() {
+    void loop() 
+    {
         while (!stopFlag_) {
             std::vector<unsigned char> local;
 
@@ -88,6 +89,7 @@ private:
 // ======================================================
 class EmulatorHost {
 public:
+//Connect on OK. bufferi omistamine cd_'le vaata üle.
     bool connect(const char* dllPath,
                  const std::string& plantsPath,
                  int plantNo)
@@ -134,7 +136,7 @@ public:
     void start() {
         // start producing
         {
-            std::lock_guard<std::mutex> lk(cd_.mx);
+            //std::lock_guard<std::mutex> lk(cd_.mx);
             cd_.state = 'r';
         }
         cd_.cv.notify_all();
@@ -146,26 +148,37 @@ public:
 
     void stop() {
         {
-            std::lock_guard<std::mutex> lk(cd_.mx);
+            //std::lock_guard<std::mutex> lk(cd_.mx);
             cd_.state = 's';
         }
         cd_.cv.notify_all();
     }
-
+    //ignore if running
     void disconnect() {
+
         if (h_) {
             FreeLibrary(h_);
             h_ = nullptr;
         }
     }
 
+    void pause() {
+        {
+            //std::lock_guard<std::mutex> lk(cd_.mx);
+            cd_.state = 'b';
+        }
+        cd_.cv.notify_all();
+    }
+    //getter
     ControlData& control() { return cd_; }
 
 private:
-    using SetFn = void(*)(std::string, int);
+    //“pointer to a function that returns void and takes (std::string, int)”
+    typedef void (*SetFn)(std::string, int);
     using RunFn = void(*)(ControlData*);
 
     HMODULE h_{nullptr};
+    //function pointers
     SetFn set_{nullptr};
     RunFn run_{nullptr};
 
