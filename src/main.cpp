@@ -1,51 +1,31 @@
-#include "main.h"
-
 #include <iostream>
+#include "LoggerApp.h"
 
 int main() {
-    // 1) OWNER FIRST (creates ControlData here)
-    EmulatorHost host;
+    LoggerApp app;
 
-    // 2) BORROWER AFTER OWNER
-    PacketConsumer consumer(host.control());
+    const char* dllPath =
+        "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410PlantEmulator.dll";
 
+    const char* plantsPath = 
+        "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410Plants.txt";
+        
+    int plantNumber = 1;
 
-    // 3) CONNECT + CONFIGURE
-    if (!host.connect(
-            "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410PlantEmulator.dll",
-            "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410Plants.txt",
-            1))
-    {
-        std::cerr << "Failed to connect to emulator DLL\n";
+    if (!app.connect(dllPath, plantsPath, plantNumber)) {
+        std::cerr << "connect failed\n";
         return 1;
     }
-    std::cout << "PacketConsumer created\n";
-    // 4) START CONSUMER FIRST
-    consumer.start();
 
-    // 5) START DLL PRODUCER
-    host.start();
+    app.start();
 
-    std::cout << "Running. Press ENTER to stop...\n";
+     //std::cout << "Running. Press ENTER to stop...\n";
     std::cin.get();
+    
 
-    // =====================================================
-    // CLEAN SHUTDOWN (ORDER IS CRITICAL)
-    // =====================================================
-
-    // 6) STOP DLL PRODUCER (sets 's' + notify)
-    host.stop();
-
-    // 7) WAKE ALL WAITERS (consumer + DLL)
-    host.control().cv.notify_all();
-
-    // 8) STOP CONSUMER THREAD
-    consumer.requestStop();
-    host.control().cv.notify_all();
-    consumer.join();
-
-    // 9) UNLOAD DLL ONLY AFTER THREADS ARE DONE
-    host.disconnect();
+    app.stop();
+    //app.printData1();
+    app.disconnect();
 
     std::cout << "Exited cleanly\n";
     return 0;
