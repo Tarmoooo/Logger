@@ -24,7 +24,7 @@ int main() {
     
 
     app.stop();
-    //app.printData1();
+    app.printData1();
     app.disconnect();
 
     std::cout << "Exited cleanly\n";

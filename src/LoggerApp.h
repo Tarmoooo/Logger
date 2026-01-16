@@ -14,17 +14,35 @@
 #include <cstring>
 #include <stdexcept>
 
+#include <fstream>
+#include <cstdint>
+#include <mutex>
+
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+
+
 
 class LoggerApp { 
 public:
         LoggerApp()=default;
         //LoggerApp():host_(),consumer_(host_.control()) {};
 
+        std::string to_datetime_string(std::chrono::system_clock::time_point tp);
         int32_t read_i32(const std::vector<unsigned char>& b, size_t& off);
         double read_double(const std::vector<unsigned char>& b, size_t& off);
         std::string read_cstr(const std::vector<unsigned char>& b, size_t& off);
-        void parse_packet(const std::vector<unsigned char>& b);
+        
+        void parse_packet(const std::vector<unsigned char>& b,
+                             std::chrono::system_clock::time_point ts);
 
+        void load_log_file(const std::string& path);
+
+        void append_record(const std::vector<unsigned char>& packet,
+                                std::chrono::system_clock::time_point ts);
+        void openLog();
+        void closeLog();
 
         bool connect(const char* dllPath, const char* plantsPath, int plantNo);
         void disconnect();
@@ -41,6 +59,11 @@ public:
                         std::variant<int, double>value, 
                         std::chrono::system_clock::time_point ts);
         void printData1();
+        
+        static int64_t to_s(std::chrono::system_clock::time_point t);
+        
+
+
 private:
 
         EmulatorHost host_;
@@ -58,5 +81,6 @@ private:
                         >
                 > Data1;
         static bool isIntPoint(const std::string& channel, const std::string& point);
-
+        std::ofstream logOut_;
+        std::mutex logMx_;
 };
