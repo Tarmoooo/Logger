@@ -15,17 +15,31 @@ int64_t LoggerApp::to_s(std::chrono::system_clock::time_point t) {
 void LoggerApp::append_record(const std::vector<unsigned char>& packet,
                               std::chrono::system_clock::time_point ts)
 {
-    const int64_t s = to_s(ts);
+   const int64_t s = to_s(ts);
+
+    // Read packetLen from the first 4 bytes (without using your offset-based reader)
+    if (packet.size() < 4) return; // or throw
+
+    int32_t packetLen = 0;
+    std::memcpy(&packetLen, packet.data(), 4);
+
+    if (packetLen <= 0 || static_cast<size_t>(packetLen) > packet.size()) {
+        // packet is incomplete/corrupt (stream chunk)
+        return; // or throw
+    }
 
     std::lock_guard<std::mutex> lk(logMx_);
 
+    // Write EXACTLY packetLen bytes (drop the extra byte(s))
     logOut_.write(reinterpret_cast<const char*>(packet.data()),
-              static_cast<std::streamsize>(packet.size()));
+                  static_cast<std::streamsize>(packetLen));
 
+    // Write timestamp (seconds)
     logOut_.write(reinterpret_cast<const char*>(&s),
-              static_cast<std::streamsize>(sizeof(s)));
+                  static_cast<std::streamsize>(sizeof(s)));
 
-    logOut_.flush(); // optional; you can omit for performance
+    // optional
+    logOut_.flush();
 }
 
 std::string LoggerApp::to_datetime_string(
@@ -199,9 +213,24 @@ void LoggerApp::resume()
 
 void LoggerApp::openLog()
 {
-    logOut_.open("logfile.bin", std::ios::binary | std::ios::app);
-    if (!logOut_) throw std::runtime_error("Failed to open log file");
+    const std::string path = "logfile.bin";
 
+    // 1) If file exists and not empty → load it
+    if (std::filesystem::exists(path) &&
+        std::filesystem::file_size(path) > 0)
+    {
+        
+        load_log_file(path);
+        std::cout<<"loading log file";
+    }
+
+    // 2) Open for append (creates file if needed)
+    logOut_.open(path, std::ios::binary | std::ios::app);
+    if (!logOut_) {
+        std::cout<<"failed to open logfile";
+        throw std::runtime_error("Failed to open log file");
+        
+    }
 }
 
 void LoggerApp::addData1(const std::string& channel,

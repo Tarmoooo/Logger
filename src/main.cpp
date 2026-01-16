@@ -11,7 +11,7 @@ int main() {
         "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410Plants.txt";
         
     int plantNumber = 1;
-
+    app.openLog();
     if (!app.connect(dllPath, plantsPath, plantNumber)) {
         std::cerr << "connect failed\n";
         return 1;
