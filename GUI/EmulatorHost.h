@@ -7,35 +7,33 @@
 #include <string>
 #include <vector>
 
-#include "ControlData.h"
+#include "Data.h"
 
 class EmulatorHost {
 public:
     EmulatorHost() = default;
-    ~EmulatorHost(); // best-effort disconnect
+    ~EmulatorHost();
 
     EmulatorHost(const EmulatorHost&) = delete;
     EmulatorHost& operator=(const EmulatorHost&) = delete;
 
-    // Loads DLL, resolves exports, wires ControlData pointers, calls Set(...)
     bool connect(const char* dllPath, const char* plantsPath, int plantNo);
-
-    // State control (assignment commands)
-    void start();   // state='r', calls Run(...)
-    void stop();    // state='s'
-    void pause();   // state='b'
-    void resume();  // state='r'
+    void start();
+    void stop();
+    void pause();
+    void resume();
     char state() const;
-    // Unload DLL (should only be done when stopped + consumer joined)
+
     void disconnect();
 
-    bool isConnected() const { return h_ != nullptr; }
-    ControlData& control() { return cd_; }
+    bool isConnected();
+    ControlData& control();
+
 
 private:
     void setState(char s);
 
-    using SetFn = void(*)(std::string, int); // KEEP: matches your working baseline
+    using SetFn = void(*)(std::string, int);
     using RunFn = void(*)(ControlData*);
 
     HMODULE h_{nullptr};
@@ -44,7 +42,8 @@ private:
 
     std::vector<unsigned char> buffer_;
     std::promise<void> finished_;
-    std::future<void> finishedFuture_{finished_.get_future()};
+    ControlData cd_;
 
-    ControlData cd_{};
+
+
 };

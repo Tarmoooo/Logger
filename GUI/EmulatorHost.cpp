@@ -2,12 +2,14 @@
 
 #include <iostream>
 
-EmulatorHost::~EmulatorHost() {
-    // Don’t try to stop threads here (consumer may already be gone).
-    // Just unload if still connected.
-    disconnect();
-}
+static const char* dllPath =
+    "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410PlantEmulator.dll";
+static const char* plantsPath =
+    "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410Plants.txt";
+static int plantNumber = 1;
 
+EmulatorHost::~EmulatorHost() {
+}
 
 char EmulatorHost::state() const
 {
@@ -15,18 +17,18 @@ char EmulatorHost::state() const
 }
 
 bool EmulatorHost::connect(const char* dllPath, const char* plantsPath, int plantNo) {
-    //std::cout << "[connect] Loading DLL...\n";
+    if(h_) return 1;
+
     h_ = LoadLibraryA(dllPath);
     if (!h_) {
-        std::cerr << "[connect] LoadLibraryA failed. GetLastError=" << GetLastError() << "\n";
+        std::cerr << "LoadLibraryA failed. GetLastError=" << GetLastError() << "\n";
         return false;
     }
 
-    //std::cout << "[connect] Getting exports...\n";
     set_ = (SetFn)GetProcAddress(h_, "SetIAS0410PlantEmulator");
     run_ = (RunFn)GetProcAddress(h_, "RunIAS0410PlantEmulator");
     if (!set_ || !run_) {
-        std::cerr << "[connect] GetProcAddress failed. GetLastError=" << GetLastError() << "\n";
+        std::cerr << "GetProcAddress failed. GetLastError=" << GetLastError() << "\n";
         FreeLibrary(h_);
         h_ = nullptr;
         set_ = nullptr;
@@ -34,54 +36,73 @@ bool EmulatorHost::connect(const char* dllPath, const char* plantsPath, int plan
         return false;
     }
 
-    // Wire ControlData pointers BEFORE calling Set (matches your working code)
     buffer_.clear();
     cd_.pBuf  = &buffer_;
     cd_.pProm = &finished_;
-    setState('s'); // start stopped (safe default)
+    setState('s');
 
-    //std::cout << "[connect] Calling Set...\n";
     try {
         set_(plantsPath, plantNo);
     } catch (...) {
-        std::cerr << "[connect] SetIAS0410PlantEmulator threw/aborted\n";
+        std::cerr << " SetIAS0410PlantEmulator threw/aborted\n";
         FreeLibrary(h_);
         h_ = nullptr;
         set_ = nullptr;
         run_ = nullptr;
         return false;
     }
-
-    //std::cout << "[connect] Set finished\n";
     return true;
 }
 
 void EmulatorHost::setState(char s) {
-    {
-        std::lock_guard<std::mutex> lk(cd_.mx);
-        cd_.state = s;
-    }
+
+    cd_.state = s;
     cd_.cv.notify_all();
 }
 
-
+ControlData& EmulatorHost::control() { return cd_;}
 
 void EmulatorHost::start() {
+
+    if (state() == 'r' || state() == 'b' || isConnected()!=1) return;
+
+    buffer_.clear();
+    finished_ = std::promise<void>();
+
     setState('r');
-    //std::cout << "[start] Calling Run...\n";
-    run_(&cd_); // DLL starts detached producer thread
-    //std::cout << "[start] Run called\n";
+
+    if (run_) {
+        run_(&cd_);
+        std::cout << "Runnning\n";
+    }
+
 }
 
 void EmulatorHost::stop()   { setState('s'); }
-void EmulatorHost::pause()  { setState('b'); }
-void EmulatorHost::resume() { setState('r'); }
+
+void EmulatorHost::pause(){
+
+    if(state()=='s') return;
+    setState('b');
+    std::cout<<"Pausing\n";
+}
+void EmulatorHost::resume(){
+
+    if(state()=='b') setState('r');
+    std::cout<<"Resuming\n";
+}
 
 void EmulatorHost::disconnect() {
+    if(state()!='s') return;
     if (h_) {
         FreeLibrary(h_);
         h_ = nullptr;
     }
     set_ = nullptr;
     run_ = nullptr;
+    std::cout<<"Disconnecting\n";
+}
+
+bool EmulatorHost::isConnected(){
+    return h_ != nullptr;
 }

@@ -1,157 +1,110 @@
 
 #include "LoggerApp.h"
+static const char* dllPath =
+    "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410PlantEmulator.dll";
+static const char* plantsPath =
+    "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410Plants.txt";
+static int plantNumber = 1;
 
-
-
-int32_t LoggerApp::read_i32(const std::vector<unsigned char>& b, size_t& off) {
-    if (off + 4 > b.size()) throw std::runtime_error("out of bounds");
-    int32_t v;
-    std::memcpy(&v, b.data() + off, 4);
-    //std::cout<<v<<"\n";
-    off += 4;
-    return v;
-}
-double LoggerApp::read_double(const std::vector<unsigned char>& b, size_t& off) {
-    if (off + 8 > b.size()) throw std::runtime_error("out of bounds");
-    double v;
-    std::memcpy(&v, b.data() + off, 8);
-    //std::cout<<v<<"\n";
-    off += 8;
-    return v;
-}
-std::string LoggerApp::read_cstr(const std::vector<unsigned char>& b, size_t& off) {
-    size_t start = off;
-    while (off < b.size() && b[off] != 0) off++;
-    if (off >= b.size()) throw std::runtime_error("bad string");
-    std::string s(reinterpret_cast<const char*>(b.data() + start), off - start);
-    //std::cout<<s<<"\n";
-    off++; // skip '\0'
-    return s;
-}
-bool LoggerApp::isIntPoint(const std::string& channel, const std::string& point) {
-    // Minimal assumption for now:
-    return point == "Level";
-}
-
-
-void LoggerApp::parse_packet(const std::vector<unsigned char>& b) {
-    //std::cout << "parse_packet: buffer size = " << b.size() << "\n";
-    size_t off = 0;
-
-    // 1) packet length
-    const int32_t packetLen = read_i32(b, off);
-
-    // 2) number of channels
-    const int32_t channelCnt = read_i32(b, off);
-
-    // timestamp for all values in this packet
-    const auto ts = std::chrono::system_clock::now();
-
-    // 3) channels
-    for (int c = 0; c < channelCnt; ++c) {
-        // channel: point count + channel name
-        const int32_t pointCnt = read_i32(b, off);
-        const std::string ch   = read_cstr(b, off);
-
-        // points
-        for (int p = 0; p < pointCnt; ++p) {
-            const std::string pt = read_cstr(b, off);
-
-            // value: int32 or double
-            if (isIntPoint(ch, pt)) {
-                const int32_t v = read_i32(b, off);
-                addData1(ch, pt, v, ts);
-                // std::cout << ch << " / " << pt << " = " << v << " (int)\n";
-            } else {
-                const double v = read_double(b, off);
-                addData1(ch, pt, v, ts);
-                // std::cout << ch << " / " << pt << " = " << v << " (double)\n";
-            }
-        }
-    }
-}
-
-
-
-
-bool LoggerApp::connect(const char* dllPath, 
-                        const char* plantsPath, 
-                        int plantNo)
+#include <iostream>
+LoggerApp::LoggerApp(int argc, char *argv[])
+    :QApplication(argc, argv), consumer_(host_.control())
 {
-    return host_.connect(dllPath, plantsPath, plantNo);
-};
+    Q_UNUSED(argc)
+    Q_UNUSED(argv)
 
-void LoggerApp::disconnect()
-{   
-    if(host_.state()!='s')
-    {
-      return;
-    }
-    host_.disconnect();
-};
+    connect(&ui_, &LoggerUI::connectButtonClicked,
+            this, [this](){
+                host_.connect(dllPath, plantsPath, plantNumber);
+            });
 
-//if connected?
-void LoggerApp::start()
-{
-    consumer_.setHandler(
-        [this](const std::vector<unsigned char>& packet) {
-            parse_packet(packet);
-        }
-);
-    consumer_.start();
-    host_.start();
-};
+    connect(&ui_, &LoggerUI::disconnectButtonClicked,
+            this, [this](){
+        if(host_.state()!='s') return;
+                consumer_.stop();
+                consumer_.join();
+                host_.disconnect();
+    });
 
-//why join?
-void LoggerApp::stop()
-{
-    host_.stop();
-    consumer_.stop();
-};
+    //TODO: check if connect=1
+    connect(&ui_, &LoggerUI::startButtonClicked,
+            this, [this](){
+        if(host_.isConnected()!=1) return;
+        /*
+                consumer_.stop();
+                consumer_.join();
+        */
+                consumer_.start();
+                host_.start();
+            });
 
-void LoggerApp::pause()
-{
-    host_.pause();
-};
+    connect(&ui_, &LoggerUI::stopButtonClicked,
+            this, [this](){
 
-void LoggerApp::resume()
-{
-    host_.resume();
-};
+            consumer_.stop();
+                host_.stop();
+                //consumer_.stop();
+            });
+
+    connect(&ui_, &LoggerUI::pauseButtonClicked,
+            this, [this](){
+            host_.pause();
+                });
+
+    connect(&ui_, &LoggerUI::resumeButtonClicked,
+            this, [this](){
+
+                host_.resume();
+
+            });
+
+    connect(&ui_, &LoggerUI::openButtonClicked,
+            this, [this](){
+                // 1. Show the dialog
+                QString fileName = QFileDialog::getOpenFileName(&ui_, "Open Saved Log", "", "Binary Files (*.bin)");
+                std::string fName= fileName.toStdString();
+                fileMan_.openFile(fName);
+            });
+
+    connect(this, &LoggerApp::sendMeasurement, &ui_, &LoggerUI::onSendMeasurement);
+
+    connect(this, &LoggerApp::showData, &ui_, &LoggerUI::onShowData);
 
 
-void LoggerApp::addData1(const std::string& channel,
-                         const std::string& point,
-                         std::variant<int, double> value,
-                         std::chrono::system_clock::time_point ts)
-{
-   //do i need to use insert() first and then update with map[key]=newValue
-   Data1[channel][point].push_back({value, ts});
-};
+    connect(&ui_, &LoggerUI::showDataButtonClicked, this, [this](const QString& channelName) {
+        if(host_.isConnected()) return;
+        ChannelMap result = model_.returnData(channelName.toStdString());
+        Q_EMIT showData(result);
 
-void LoggerApp::printData1() {
-    for (const auto& [channel, points] : Data1) {
-        std::cout << "Channel: " << channel << "\n";
+    });
 
-        for (const auto& [point, values] : points) {
-            std::cout << "  Point: " << point << "\n";
 
-            for (const auto& [val, time] : values) {
-                std::visit([](auto v) {
-                    std::cout << "    value = " << v << "\n";
-                }, val);
-            }
-        }
-    }
+    consumer_.addHandler([this](const std::vector<unsigned char>& packet, const std::chrono::system_clock::time_point& timep)
+                         {
+                             parser_.parsePacket(packet, timep);
+
+                         });
+
+    parser_.addHandler([this](const MeasurementData& data)
+                       {
+                           model_.addData(data);
+                           Q_EMIT sendMeasurement(data);
+
+                       });
+
+    consumer_.addHandler([this](const std::vector<unsigned char>& vec, const std::chrono::system_clock::time_point& timep)
+                         {
+                             fileMan_.saveToFile(vec, timep);
+                         });
+    fileMan_.addHandler([this](const std::vector<unsigned char>& vec, const std::chrono::system_clock::time_point& timep)
+                        {
+                            parser_.parsePacket(vec, timep);
+                        });
+
+
+
+    ui_.show();
+
 }
 
-//???return 0?
-void LoggerApp::exit()
-{
-
-};  
-
-void LoggerApp::print(){};
-void LoggerApp::printChannelName(){};
-void LoggerApp::printChannelNamePointName(){};
 

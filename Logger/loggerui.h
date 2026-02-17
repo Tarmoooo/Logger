@@ -1,10 +1,8 @@
-#pragma once
+#ifndef LOGGERUI_H
+#define LOGGERUI_H
 
 #include <QWidget>
-#include <QFileDialog>
-#include <QFile>
-#include "Data.h"
-#include <iostream>
+
 //namespace for Q generated UI classes
 namespace Ui {
 class LoggerUI;
@@ -19,33 +17,24 @@ class LoggerUI : public QWidget
 public:
     explicit LoggerUI(QWidget *parent = nullptr);
     ~LoggerUI();
-    void appendLog(const QString &line);
-
-
-public Q_SLOTS:
-    void onSendMeasurement(const MeasurementData& data);
-    void onShowData(ChannelMap& data);
-
 
 Q_SIGNALS:
     void connectButtonClicked();
     void disconnectButtonClicked();
     void startButtonClicked();
     void stopButtonClicked();
-
     void pauseButtonClicked();
     void resumeButtonClicked();
     void exitButtonClicked();
-
-    void closeButtonClicked();
-    void showDataButtonClicked(const QString& inputText);
-    void showLimitsButtonClicked(const QString& inputText);
-
-    void disconnectRequested();
     void openButtonClicked();
+    void closeButtonClicked();
+    void showDataButtonClicked(const QString &address);
+    void showLimitsButtonClicked();
+
 
 
 private:
     Ui::LoggerUI *ui;
 };
 
+#endif // LOGGERUI_H

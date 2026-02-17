@@ -10,19 +10,24 @@ PacketConsumer::~PacketConsumer() {
     join();
 }
 
-void PacketConsumer::setHandler(Handler h) {
-    handler_ = std::move(h);
+void PacketConsumer::addHandler(std::function<void(const std::vector<unsigned char>&, const std::chrono::system_clock::time_point&)> handler)
+{
+    handlers_.push_back(handler);
 }
 
-
 void PacketConsumer::start() {
+    if (th_.joinable()) return;
     stopFlag_ = false;
     th_ = std::thread([this] { loop(); });
 }
 
+
 void PacketConsumer::stop() {
     stopFlag_ = true;
     cd_.cv.notify_all();
+    //cd_.state.store('s');
+    join();
+
 }
 
 void PacketConsumer::join() {
@@ -35,34 +40,34 @@ void PacketConsumer::loop() {
         {
             std::unique_lock<std::mutex> lk(cd_.mx);
 
-            // Predicate prevents missed/spurious wakeups
             cd_.cv.wait(lk, [&] {
-                return stopFlag_
-                    || cd_.state.load() != 'r'
-                    || (cd_.pBuf && !cd_.pBuf->empty());
+                return stopFlag_ || !cd_.pBuf->empty() || cd_.state.load() == 's';
+
             });
 
-            if (stopFlag_) break;
-
-            const char st = cd_.state.load();
-            if (st == 's') break;     // stop => terminate consumer
-            if (st == 'b') continue;  // break => paused
-
-            if (!cd_.pBuf || cd_.pBuf->empty()) continue;
-
-            local = *cd_.pBuf;        // copy out quickly
-
-            cd_.pBuf->clear();        // mark consumed
+            if (cd_.pBuf && !cd_.pBuf->empty()) {
+                local = *cd_.pBuf;
+                cd_.pBuf->clear();
+            }
+                /*
+            } else {
+                continue;
+            }
+                */
+            if (stopFlag_ || cd_.state.load() == 's') break;
 
         }
 
-        cd_.cv.notify_one();          // ACK producer
+        cd_.cv.notify_one();
 
-        // after local is filled and mutex is released
-        if (handler_) {
-        handler_(local);
+        std::chrono::system_clock::time_point timep = std::chrono::system_clock::now();
+        for(auto &handler: handlers_)
+        {
+            handler(local, timep);
         }
 
         std::cout << "Got data! Buffer size = " << local.size() << " bytes\n";
     }
+
+
 }

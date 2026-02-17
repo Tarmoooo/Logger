@@ -11,17 +11,18 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
 qt_standard_project_setup()
 
-qt_add_executable(Logger
+qt_add_executable(IAS0410ObjPlantLogger
     main.cpp
-    LoggerApp.cpp
-    LoggerApp.h
-    PacketConsumer.cpp
-    PacketConsumer.h
-    EmulatorHost.cpp
-    EmulatorHost.h
-    ControlData.h
-    loggerui.h loggerui.cpp loggerui.ui
+    LoggerApp.cpp LoggerApp.h
+    PacketConsumer.cpp PacketConsumer.h
+    EmulatorHost.cpp EmulatorHost.h
+    Data.h
+    loggerui.cpp loggerui.ui loggerui.h
 
+    packetparser.h packetparser.cpp
+
+    measurementmodel.h measurementmodel.cpp
+    filemanager.h filemanager.cpp
 )
 
-target_link_libraries(Logger PRIVATE Qt6::Core Qt6::Widgets)
+target_link_libraries(IAS0410ObjPlantLogger PRIVATE Qt6::Core Qt6::Widgets)

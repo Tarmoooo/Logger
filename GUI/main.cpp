@@ -1,44 +1,12 @@
-#include <QApplication>
-#include <iostream>
+
 #include "LoggerApp.h"
-#include "loggerui.h"
+
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
-    LoggerUI mainWindow;
-    mainWindow.show();
-    return app.exec(); // event loop
+    LoggerApp app(argc, argv);
 
-    /*
-    std::cout<<"Start";
-        LoggerApp app;
+    return app.exec();
 
-        const char* dllPath =
-            "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410PlantEmulator.dll";
-
-        const char* plantsPath =
-            "C:/Users/Admin/Documents/PROJECT C++ Programmeerimine/src/IAS0410Plants.txt";
-
-        int plantNumber = 1;
-
-        if (!app.connect(dllPath, plantsPath, plantNumber)) {
-            std::cerr << "connect failed\n";
-            return 1;
-        }
-
-        app.start();
-
-        //std::cout << "Running. Press ENTER to stop...\n";
-        std::cin.get();
-
-
-        app.stop();
-        //app.printData1();
-        app.disconnect();
-
-        std::cout << "Exited cleanly\n";
-        return 0;
-        */
 
 }
